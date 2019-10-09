@@ -1,0 +1,6 @@
+apiVersion: terraform.gitops.k8s.io/v1alpha1
+kind: Repo
+metadata:
+  name: di-gitops-example-terraform-component
+spec:
+  url: git@github.com:davidmontoyago/di-gitops-example-terraform-component.git
