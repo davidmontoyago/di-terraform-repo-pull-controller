@@ -6,7 +6,7 @@ go 1.12
 
 require (
 	k8s.io/api v0.0.0-20191005115622-2e41325d9e4b
-	k8s.io/apimachinery v0.0.0-20191005115455-e71eb83a557c
+	k8s.io/apimachinery v0.0.0-20191006235458-f9f2f3f8ab02
 	k8s.io/client-go v0.0.0-20191005115821-b1fd78950135
 	k8s.io/code-generator v0.0.0-20191003035328-700b1226c0bd
 	k8s.io/klog v1.0.0
