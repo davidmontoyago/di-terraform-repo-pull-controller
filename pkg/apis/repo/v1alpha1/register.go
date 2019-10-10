@@ -5,7 +5,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
-	repo "k8s.io/sample-controller/pkg/apis/repo"
+	repo "github.com/davidmontoyago/di-terraform-repo-pull-controller/pkg/apis/repo"
 )
 
 // SchemeGroupVersion is group version used to register these objects
