@@ -1,6 +1,4 @@
 /*
-Copyright The Kubernetes Authors.
-
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
@@ -23,13 +21,13 @@ import (
 	sync "sync"
 	time "time"
 
+	versioned "github.com/davidmontoyago/di-terraform-repo-pull-controller/pkg/generated/clientset/versioned"
+	internalinterfaces "github.com/davidmontoyago/di-terraform-repo-pull-controller/pkg/generated/informers/externalversions/internalinterfaces"
+	repo "github.com/davidmontoyago/di-terraform-repo-pull-controller/pkg/generated/informers/externalversions/repo"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	cache "k8s.io/client-go/tools/cache"
-	versioned "github.com/davidmontoyago/di-terraform-repo-pull-controller/pkg/generated/clientset/versioned"
-	internalinterfaces "github.com/davidmontoyago/di-terraform-repo-pull-controller/pkg/generated/informers/externalversions/internalinterfaces"
-	samplecontroller "github.com/davidmontoyago/di-terraform-repo-pull-controller/pkg/generated/informers/externalversions/samplecontroller"
 )
 
 // SharedInformerOption defines the functional option type for SharedInformerFactory.
@@ -172,9 +170,9 @@ type SharedInformerFactory interface {
 	ForResource(resource schema.GroupVersionResource) (GenericInformer, error)
 	WaitForCacheSync(stopCh <-chan struct{}) map[reflect.Type]bool
 
-	Samplecontroller() samplecontroller.Interface
+	Samplecontroller() repo.Interface
 }
 
-func (f *sharedInformerFactory) Samplecontroller() samplecontroller.Interface {
-	return samplecontroller.New(f, f.namespace, f.tweakListOptions)
+func (f *sharedInformerFactory) Samplecontroller() repo.Interface {
+	return repo.New(f, f.namespace, f.tweakListOptions)
 }

@@ -1,6 +1,4 @@
 /*
-Copyright The Kubernetes Authors.
-
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
@@ -21,10 +19,10 @@ package versioned
 import (
 	"fmt"
 
+	samplecontrollerv1alpha1 "github.com/davidmontoyago/di-terraform-repo-pull-controller/pkg/generated/clientset/versioned/typed/repo/v1alpha1"
 	discovery "k8s.io/client-go/discovery"
 	rest "k8s.io/client-go/rest"
 	flowcontrol "k8s.io/client-go/util/flowcontrol"
-	samplecontrollerv1alpha1 "github.com/davidmontoyago/di-terraform-repo-pull-controller/pkg/generated/clientset/versioned/typed/samplecontroller/v1alpha1"
 )
 
 type Interface interface {

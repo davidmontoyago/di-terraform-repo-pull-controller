@@ -1,6 +1,4 @@
 /*
-Copyright The Kubernetes Authors.
-
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
@@ -19,14 +17,14 @@ limitations under the License.
 package fake
 
 import (
+	clientset "github.com/davidmontoyago/di-terraform-repo-pull-controller/pkg/generated/clientset/versioned"
+	samplecontrollerv1alpha1 "github.com/davidmontoyago/di-terraform-repo-pull-controller/pkg/generated/clientset/versioned/typed/repo/v1alpha1"
+	fakesamplecontrollerv1alpha1 "github.com/davidmontoyago/di-terraform-repo-pull-controller/pkg/generated/clientset/versioned/typed/repo/v1alpha1/fake"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/discovery"
 	fakediscovery "k8s.io/client-go/discovery/fake"
 	"k8s.io/client-go/testing"
-	clientset "github.com/davidmontoyago/di-terraform-repo-pull-controller/pkg/generated/clientset/versioned"
-	samplecontrollerv1alpha1 "github.com/davidmontoyago/di-terraform-repo-pull-controller/pkg/generated/clientset/versioned/typed/samplecontroller/v1alpha1"
-	fakesamplecontrollerv1alpha1 "github.com/davidmontoyago/di-terraform-repo-pull-controller/pkg/generated/clientset/versioned/typed/samplecontroller/v1alpha1/fake"
 )
 
 // NewSimpleClientset returns a clientset that will respond with the provided objects.
