@@ -54,7 +54,7 @@ type repos struct {
 }
 
 // newRepos returns a Repos
-func newRepos(c *SamplecontrollerV1alpha1Client, namespace string) *repos {
+func newRepos(c *RepoV1alpha1Client, namespace string) *repos {
 	return &repos{
 		client: c.RESTClient(),
 		ns:     namespace,

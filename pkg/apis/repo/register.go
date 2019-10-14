@@ -1,5 +1,5 @@
 package repo
 
 const (
-	GroupName = "terraform.gitops.k8s.io"
+	GroupName = "repo.terraform.gitops.k8s.io"
 )

@@ -59,13 +59,13 @@ func NewFilteredRepoInformer(client versioned.Interface, namespace string, resyn
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.SamplecontrollerV1alpha1().Repos(namespace).List(options)
+				return client.RepoV1alpha1().Repos(namespace).List(options)
 			},
 			WatchFunc: func(options v1.ListOptions) (watch.Interface, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.SamplecontrollerV1alpha1().Repos(namespace).Watch(options)
+				return client.RepoV1alpha1().Repos(namespace).Watch(options)
 			},
 		},
 		&repov1alpha1.Repo{},

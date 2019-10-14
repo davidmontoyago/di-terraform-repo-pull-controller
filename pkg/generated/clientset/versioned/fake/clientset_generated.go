@@ -18,8 +18,8 @@ package fake
 
 import (
 	clientset "github.com/davidmontoyago/di-terraform-repo-pull-controller/pkg/generated/clientset/versioned"
-	samplecontrollerv1alpha1 "github.com/davidmontoyago/di-terraform-repo-pull-controller/pkg/generated/clientset/versioned/typed/repo/v1alpha1"
-	fakesamplecontrollerv1alpha1 "github.com/davidmontoyago/di-terraform-repo-pull-controller/pkg/generated/clientset/versioned/typed/repo/v1alpha1/fake"
+	repov1alpha1 "github.com/davidmontoyago/di-terraform-repo-pull-controller/pkg/generated/clientset/versioned/typed/repo/v1alpha1"
+	fakerepov1alpha1 "github.com/davidmontoyago/di-terraform-repo-pull-controller/pkg/generated/clientset/versioned/typed/repo/v1alpha1/fake"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/discovery"
@@ -74,7 +74,7 @@ func (c *Clientset) Tracker() testing.ObjectTracker {
 
 var _ clientset.Interface = &Clientset{}
 
-// SamplecontrollerV1alpha1 retrieves the SamplecontrollerV1alpha1Client
-func (c *Clientset) SamplecontrollerV1alpha1() samplecontrollerv1alpha1.SamplecontrollerV1alpha1Interface {
-	return &fakesamplecontrollerv1alpha1.FakeSamplecontrollerV1alpha1{Fake: &c.Fake}
+// RepoV1alpha1 retrieves the RepoV1alpha1Client
+func (c *Clientset) RepoV1alpha1() repov1alpha1.RepoV1alpha1Interface {
+	return &fakerepov1alpha1.FakeRepoV1alpha1{Fake: &c.Fake}
 }

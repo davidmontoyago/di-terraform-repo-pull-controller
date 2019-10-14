@@ -28,13 +28,13 @@ import (
 
 // FakeRepos implements RepoInterface
 type FakeRepos struct {
-	Fake *FakeSamplecontrollerV1alpha1
+	Fake *FakeRepoV1alpha1
 	ns   string
 }
 
-var reposResource = schema.GroupVersionResource{Group: "samplecontroller.k8s.io", Version: "v1alpha1", Resource: "repos"}
+var reposResource = schema.GroupVersionResource{Group: "repo.terraform.gitops.k8s.io", Version: "v1alpha1", Resource: "repos"}
 
-var reposKind = schema.GroupVersionKind{Group: "samplecontroller.k8s.io", Version: "v1alpha1", Kind: "Repo"}
+var reposKind = schema.GroupVersionKind{Group: "repo.terraform.gitops.k8s.io", Version: "v1alpha1", Kind: "Repo"}
 
 // Get takes name of the repo, and returns the corresponding repo object, and an error if there is any.
 func (c *FakeRepos) Get(name string, options v1.GetOptions) (result *v1alpha1.Repo, err error) {
