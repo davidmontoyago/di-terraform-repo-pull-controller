@@ -28,7 +28,7 @@ import (
 	listers "github.com/davidmontoyago/di-terraform-repo-pull-controller/pkg/generated/listers/repo/v1alpha1"
 )
 
-const controllerAgentName = "sample-controller"
+const controllerAgentName = "repo-gitops-controller"
 
 const (
 	// SuccessSynced is used as part of the Event 'reason' when a Repo is synced
@@ -104,11 +104,11 @@ func NewController(
 			controller.enqueueRepo(new)
 		},
 	})
-	// Set up an event handler for when Deployment resources change. This
-	// handler will lookup the owner of the given Deployment, and if it is
-	// owned by a Foo resource will enqueue that Foo resource for
+	// Set up an event handler for when Job resources change. This
+	// handler will lookup the owner of the given Job, and if it is
+	// owned by a Job resource will enqueue that Job resource for
 	// processing. This way, we don't need to implement custom logic for
-	// handling Deployment resources. More info on this pattern:
+	// handling Job resources. More info on this pattern:
 	// https://github.com/kubernetes/community/blob/8cafef897a22026d42f5e5bb3f104febe7e29830/contributors/devel/controllers.md
 	jobInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: controller.handleObject,
@@ -137,7 +137,7 @@ func (c *Controller) Run(threadiness int, stopCh <-chan struct{}) error {
 	defer c.workqueue.ShutDown()
 
 	// Start the informer factories to begin populating the informer caches
-	klog.Info("Starting Foo controller")
+	klog.Info("Starting Repo controller")
 
 	// Wait for the caches to be synced before starting workers
 	klog.Info("Waiting for informer caches to sync")
@@ -146,7 +146,7 @@ func (c *Controller) Run(threadiness int, stopCh <-chan struct{}) error {
 	}
 
 	klog.Info("Starting workers")
-	// Launch two workers to process Foo resources
+	// Launch two workers to process Repo resources
 	for i := 0; i < threadiness; i++ {
 		go wait.Until(c.runWorker, time.Second, stopCh)
 	}
@@ -235,10 +235,10 @@ func (c *Controller) syncHandler(key string) error {
 	// Get the Repo resource with this namespace/name
 	repo, err := c.reposLister.Repos(namespace).Get(name)
 	if err != nil {
-		// The Foo resource may no longer exist, in which case we stop
+		// The Repo resource may no longer exist, in which case we stop
 		// processing.
 		if errors.IsNotFound(err) {
-			utilruntime.HandleError(fmt.Errorf("foo '%s' in work queue no longer exists", key))
+			utilruntime.HandleError(fmt.Errorf("repo '%s' in work queue no longer exists", key))
 			return nil
 		}
 
@@ -276,7 +276,7 @@ func (c *Controller) syncHandler(key string) error {
 		return fmt.Errorf(msg)
 	}
 
-	// If this number of the replicas on the Foo resource is specified, and the
+	// If this number of the replicas on the Repo resource is specified, and the
 	// number does not equal the current desired replicas on the Deployment, we
 	// should update the Deployment resource.
 	// if foo.Spec.Replicas != nil && *foo.Spec.Replicas != *deployment.Spec.Replicas {
@@ -291,7 +291,7 @@ func (c *Controller) syncHandler(key string) error {
 		return err
 	}
 
-	// Finally, we update the status block of the Foo resource to reflect the
+	// Finally, we update the status block of the Repo resource to reflect the
 	// current state of the world
 	err = c.updateRepoStatus(repo, job)
 	if err != nil {
@@ -364,7 +364,7 @@ func (c *Controller) handleObject(obj interface{}) {
 
 		repo, err := c.reposLister.Repos(object.GetNamespace()).Get(ownerRef.Name)
 		if err != nil {
-			klog.V(4).Infof("ignoring orphaned object '%s' of foo '%s'", object.GetSelfLink(), ownerRef.Name)
+			klog.V(4).Infof("ignoring orphaned object '%s' of repo '%s'", object.GetSelfLink(), ownerRef.Name)
 			return
 		}
 
