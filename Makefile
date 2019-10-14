@@ -10,6 +10,7 @@ all: test build
 
 build:
 	$(GOBUILD) ./
+	docker build . -t repo-pull-controller:latest
 
 test:
 	$(GOTEST) ./

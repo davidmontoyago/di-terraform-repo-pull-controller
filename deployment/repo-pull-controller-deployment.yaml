@@ -1,0 +1,20 @@
+---
+apiVersion: apps/v1beta1
+kind: Deployment
+metadata:
+  name: repo-pull-controller
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: repo-pull-controller
+  template:
+    metadata:
+      labels:
+        app: repo-pull-controller
+    spec:
+      containers:
+        - name: controller
+          image: "repo-pull-controller:latest"
+          imagePullPolicy: Never
+---
