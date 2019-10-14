@@ -9,10 +9,10 @@ GO111MODULE=on
 all: test build
 
 build:
-	$(GOBUILD) cmd/kubectl-waste.go && cp ./kubectl-waste /usr/local/bin/
+	$(GOBUILD) ./
 
 test:
-	$(GOTEST) ./pkg/cmd/
+	$(GOTEST) ./
 
 clean:
 	$(GOCLEAN)
