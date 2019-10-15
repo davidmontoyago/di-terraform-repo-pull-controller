@@ -26,6 +26,7 @@ import (
 	samplescheme "github.com/davidmontoyago/di-terraform-repo-pull-controller/pkg/generated/clientset/versioned/scheme"
 	informers "github.com/davidmontoyago/di-terraform-repo-pull-controller/pkg/generated/informers/externalversions/repo/v1alpha1"
 	listers "github.com/davidmontoyago/di-terraform-repo-pull-controller/pkg/generated/listers/repo/v1alpha1"
+	poller "github.com/davidmontoyago/di-terraform-repo-pull-controller/pkg/poller"
 )
 
 const controllerAgentName = "repo-gitops-controller"
@@ -66,6 +67,9 @@ type Controller struct {
 	// recorder is an event recorder for recording Event resources to the
 	// Kubernetes API.
 	recorder record.EventRecorder
+
+	// keeps references to polling goroutines by repo key
+	repoPollers map[string]*poller.RepoPoller
 }
 
 func NewController(
@@ -94,6 +98,7 @@ func NewController(
 		reposSynced:    repoInformer.Informer().HasSynced,
 		workqueue:      workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "Repos"),
 		recorder:       recorder,
+		repoPollers:    make(map[string]*poller.RepoPoller),
 	}
 
 	klog.Info("Setting up event handlers")
@@ -250,7 +255,7 @@ func (c *Controller) syncHandler(key string) error {
 		// We choose to absorb the error here as the worker would requeue the
 		// resource otherwise. Instead, the next time the resource is updated
 		// the resource will be queued again.
-		utilruntime.HandleError(fmt.Errorf("%s: last job run name must be set", key))
+		utilruntime.HandleError(fmt.Errorf("%s: job run name not set - there must nothing running currently.", key))
 		return nil
 	}
 
@@ -330,6 +335,14 @@ func (c *Controller) enqueueRepo(obj interface{}) {
 		utilruntime.HandleError(err)
 		return
 	}
+
+	if _, ok := c.repoPollers[key]; !ok {
+		klog.Infof("Starting repo poller for '%s'...", key)
+		repoPoller := poller.NewRepoPoller(key)
+		repoPoller.Start()
+		c.repoPollers[key] = repoPoller
+	}
+
 	c.workqueue.Add(key)
 }
 
