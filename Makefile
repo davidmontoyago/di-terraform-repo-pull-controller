@@ -23,3 +23,7 @@ fmt:
 
 gen:
 	./hack/update-codegen.sh
+
+deploy:
+	kubectl delete -f deployment/repo-pull-controller-deployment.yaml --ignore-not-found
+	kubectl apply -f deployment/repo-pull-controller-deployment.yaml
