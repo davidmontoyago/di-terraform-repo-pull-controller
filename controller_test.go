@@ -17,7 +17,7 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/record"
 
-	samplecontroller "github.com/davidmontoyago/di-terraform-repo-pull-controller/pkg/apis/samplecontroller/v1alpha1"
+	samplecontroller "github.com/davidmontoyago/di-terraform-repo-pull-controller/pkg/apis/repo/v1alpha1"
 	"github.com/davidmontoyago/di-terraform-repo-pull-controller/pkg/generated/clientset/versioned/fake"
 	informers "github.com/davidmontoyago/di-terraform-repo-pull-controller/pkg/generated/informers/externalversions"
 )

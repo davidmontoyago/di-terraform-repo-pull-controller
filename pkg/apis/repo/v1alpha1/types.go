@@ -25,6 +25,7 @@ type RepoSpec struct {
 type RepoStatus struct {
 	LastPulled     string `json:"lastPulled"`
 	LastRunJobName string `json:"lastJobRun"`
+	LastGitRef     string `json:"lastGitRef"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

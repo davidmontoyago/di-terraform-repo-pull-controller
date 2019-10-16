@@ -336,9 +336,11 @@ func (c *Controller) enqueueRepo(obj interface{}) {
 		return
 	}
 
-	if _, ok := c.repoPollers[key]; !ok {
+	if _, found := c.repoPollers[key]; !found {
 		klog.Infof("Starting repo poller for '%s'...", key)
-		repoPoller := poller.NewRepoPoller(key)
+		repo := obj.(*repov1alpha1.Repo)
+		var repoCopy repov1alpha1.Repo = *repo.DeepCopy()
+		repoPoller := poller.NewRepoPoller(key, repoCopy)
 		repoPoller.Start()
 		c.repoPollers[key] = repoPoller
 	}
