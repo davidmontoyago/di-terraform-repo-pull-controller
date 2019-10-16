@@ -1,12 +1,9 @@
-FROM golang
+FROM alpine
 
-RUN mkdir -p /go/src/github.com/davidmontoyago/di-terraform-repo-pull-controller
-
-ADD . /go/src/github.com/davidmontoyago/di-terraform-repo-pull-controller
+RUN mkdir -p /go/bin
 
 WORKDIR /go
 
-RUN go get ./...
-RUN go install -v ./...
+COPY di-terraform-repo-pull-controller /go/bin
 
 CMD ["/go/bin/di-terraform-repo-pull-controller"]

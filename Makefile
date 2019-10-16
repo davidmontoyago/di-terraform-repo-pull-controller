@@ -9,7 +9,7 @@ GO111MODULE=on
 all: test build
 
 build:
-	$(GOBUILD) ./
+	GOOS=linux GOARCH=amd64 $(GOBUILD) ./
 	docker build . -t repo-pull-controller:latest
 
 test:
