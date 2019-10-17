@@ -26,6 +26,7 @@ fmt:
 	$(GOCMD) fmt ./pkg/
 
 gen:
+	go mod vendor
 	./hack/update-codegen.sh
 
 delete:
