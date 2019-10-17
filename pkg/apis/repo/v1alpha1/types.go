@@ -23,9 +23,9 @@ type RepoSpec struct {
 
 // RepoStatus is the status for a Repo resource
 type RepoStatus struct {
-	LastPulled     string `json:"lastPulled"`
-	LastRunJobName string `json:"lastJobRun"`
-	LastGitRef     string `json:"lastGitRef"`
+	RunJobName string `json:"runJobName"`
+	GitSHA     string `json:"gitSHA"`
+	RunStatus  string `json:"runStatus"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

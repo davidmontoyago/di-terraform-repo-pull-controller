@@ -103,6 +103,7 @@ func NewController(
 
 	klog.Info("Setting up event handlers")
 	// Set up an event handler for when Repo resources change
+	// TODO terminate poller on Repo deletion
 	repoInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: controller.enqueueRepo,
 		UpdateFunc: func(old, new interface{}) {
@@ -116,7 +117,7 @@ func NewController(
 	// handling Job resources. More info on this pattern:
 	// https://github.com/kubernetes/community/blob/8cafef897a22026d42f5e5bb3f104febe7e29830/contributors/devel/controllers.md
 	jobInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc: controller.handleObject,
+		AddFunc: controller.handleJob,
 		UpdateFunc: func(old, new interface{}) {
 			newDepl := new.(*batchv1.Job)
 			oldDepl := old.(*batchv1.Job)
@@ -125,9 +126,9 @@ func NewController(
 				// Two different versions of the same Deployment will always have different RVs.
 				return
 			}
-			controller.handleObject(new)
+			controller.handleJob(new)
 		},
-		DeleteFunc: controller.handleObject,
+		DeleteFunc: controller.handleJob,
 	})
 
 	return controller
@@ -250,12 +251,11 @@ func (c *Controller) syncHandler(key string) error {
 		return err
 	}
 
-	jobName := repo.Status.LastRunJobName
-	if jobName == "" {
-		// We choose to absorb the error here as the worker would requeue the
-		// resource otherwise. Instead, the next time the resource is updated
-		// the resource will be queued again.
-		utilruntime.HandleError(fmt.Errorf("%s: job run name not set - there must nothing running currently.", key))
+	jobName := repo.Status.RunJobName
+	runStatus := repo.Status.RunStatus
+	if jobName == "" || runStatus != "New" {
+		// Repo has not a Job to run or it has already run. Nothing to do
+		klog.Infof("Repo has no pending Job to run [last known run status: %s].", runStatus)
 		return nil
 	}
 
@@ -312,10 +312,11 @@ func (c *Controller) updateRepoStatus(repo *repov1alpha1.Repo, job *batchv1.Job)
 	// You can use DeepCopy() to make a deep copy of original object and modify this copy
 	// Or create a copy manually for better performance
 	repoCopy := repo.DeepCopy()
-	currentTime := time.Now()
+
+	// currentTime := time.Now()
 	// TODO set last ran datetime & last run status/run output
-	repoCopy.Status.LastPulled = currentTime.String()
-	repoCopy.Status.LastRunJobName = job.ObjectMeta.Name
+
+	repoCopy.Status.RunStatus = DetermineRunStatus(job)
 
 	// If the CustomResourceSubresources feature gate is not enabled,
 	// we must use Update instead of UpdateStatus to update the Status block of the Repo resource.
@@ -323,6 +324,22 @@ func (c *Controller) updateRepoStatus(repo *repov1alpha1.Repo, job *batchv1.Job)
 	// which is ideal for ensuring nothing other than resource status has been updated.
 	_, err := c.repoclientset.RepoV1alpha1().Repos(repo.Namespace).Update(repoCopy)
 	return err
+}
+
+func DetermineRunStatus(job *batchv1.Job) string {
+	var runStatus string
+	if job.Status.Active == 0 {
+		if job.Status.Succeeded != 0 {
+			runStatus = "Completed"
+		} else if job.Status.Failed != 0 {
+			runStatus = "Failed"
+		} else {
+			runStatus = "Pending"
+		}
+	} else {
+		runStatus = "Running"
+	}
+	return runStatus
 }
 
 // enqueueRepo takes a Repo resource and converts it into a namespace/name
@@ -340,7 +357,7 @@ func (c *Controller) enqueueRepo(obj interface{}) {
 		klog.Infof("Starting repo poller for '%s'...", key)
 		repo := obj.(*repov1alpha1.Repo)
 		var repoCopy repov1alpha1.Repo = *repo.DeepCopy()
-		repoPoller := poller.NewRepoPoller(key, repoCopy)
+		repoPoller := poller.NewRepoPoller(key, repoCopy, c.repoclientset)
 		repoPoller.Start()
 		c.repoPollers[key] = repoPoller
 	}
@@ -348,12 +365,12 @@ func (c *Controller) enqueueRepo(obj interface{}) {
 	c.workqueue.Add(key)
 }
 
-// handleObject will take any resource implementing metav1.Object and attempt
+// handleJob will take any resource implementing metav1.Object and attempt
 // to find the Repo resource that 'owns' it. It does this by looking at the
 // objects metadata.ownerReferences field for an appropriate OwnerReference.
 // It then enqueues that Repo resource to be processed. If the object does not
 // have an appropriate OwnerReference, it will simply be skipped.
-func (c *Controller) handleObject(obj interface{}) {
+func (c *Controller) handleJob(obj interface{}) {
 	var object metav1.Object
 	var ok bool
 	if object, ok = obj.(metav1.Object); !ok {
@@ -383,31 +400,33 @@ func (c *Controller) handleObject(obj interface{}) {
 			return
 		}
 
+		job := obj.(*batchv1.Job)
+		// TODO clone repo
+		repo.Status.RunStatus = DetermineRunStatus(job)
+
 		c.enqueueRepo(repo)
 		return
 	}
 }
 
 // newJob creates a new Job for a Repo resource. It also sets
-// the appropriate OwnerReferences on the resource so handleObject can discover
+// the appropriate OwnerReferences on the resource so handleJob can discover
 // the Repo resource that 'owns' it.
 func newJob(repo *repov1alpha1.Repo) *batchv1.Job {
 	labels := map[string]string{
-		"app":        "repo.terraform.gitops.k8s.io",
-		"controller": repo.Name,
+		"app":        repo.Name,
+		"controller": "repos.terraform.gitops.k8s.io",
 	}
 	return &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      repo.Status.LastRunJobName,
+			Name:      repo.Status.RunJobName,
 			Namespace: repo.Namespace,
 			OwnerReferences: []metav1.OwnerReference{
 				*metav1.NewControllerRef(repo, repov1alpha1.SchemeGroupVersion.WithKind("Repo")),
 			},
+			Labels: labels,
 		},
 		Spec: batchv1.JobSpec{
-			Selector: &metav1.LabelSelector{
-				MatchLabels: labels,
-			},
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels: labels,
@@ -415,10 +434,12 @@ func newJob(repo *repov1alpha1.Repo) *batchv1.Job {
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{
 						{
-							Name:  "terraform-run",
-							Image: "terraform-runner:latest",
+							Name:            "terraform-run",
+							Image:           "terraform-runner:latest",
+							ImagePullPolicy: corev1.PullNever,
 						},
 					},
+					RestartPolicy: corev1.RestartPolicyNever,
 				},
 			},
 		},

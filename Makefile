@@ -20,6 +20,7 @@ test:
 
 clean:
 	$(GOCLEAN)
+	make delete
 
 fmt:
 	$(GOCMD) fmt ./pkg/
@@ -27,6 +28,11 @@ fmt:
 gen:
 	./hack/update-codegen.sh
 
-deploy:
+delete:
+	kubectl delete repos --all
 	kubectl delete -f deployment/repo-pull-controller-deployment.yaml --ignore-not-found
-	kubectl apply -f deployment/repo-pull-controller-deployment.yaml
+
+deploy:
+	make build
+	make delete
+	kubectl apply -f deployment/
