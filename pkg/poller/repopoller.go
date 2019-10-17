@@ -60,7 +60,6 @@ func (poller *RepoPoller) CheckForNewRevisions() {
 
 	masterRef := FindMasterRef(refs)
 	masterHash := masterRef.Hash().String()
-	klog.Infof("Repo HEAD is %s", masterHash)
 	lastScheduledRef := poller.Repo.Status.LastGitRef
 	if masterHash != lastScheduledRef {
 		klog.Infof("Found new commit reference %s... Previous was %s", masterHash, lastScheduledRef)
@@ -71,7 +70,7 @@ func FindMasterRef(refs []*plumbing.Reference) plumbing.Reference {
 	var master plumbing.Reference
 	for _, ref := range refs {
 		if ref.Name() == plumbing.Master {
-			klog.Infof("Ref %+v", ref)
+			klog.Infof("Repo master HEAD is %s", ref.Hash().String())
 			master = *ref
 			break
 		}

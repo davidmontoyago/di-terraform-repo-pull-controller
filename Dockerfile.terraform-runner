@@ -1,0 +1,5 @@
+FROM hashicorp/terraform:light
+
+COPY ./cmd/terraform-runner/setup-terraform-repo/setup-terraform-repo /usr/bin
+
+ENTRYPOINT ["/usr/bin/setup-terraform-repo"]

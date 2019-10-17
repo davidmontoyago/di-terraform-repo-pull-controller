@@ -416,7 +416,7 @@ func newJob(repo *repov1alpha1.Repo) *batchv1.Job {
 					Containers: []corev1.Container{
 						{
 							Name:  "terraform-run",
-							Image: "terraform:latest",
+							Image: "terraform-runner:latest",
 						},
 					},
 				},

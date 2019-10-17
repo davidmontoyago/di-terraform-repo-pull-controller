@@ -9,8 +9,11 @@ GO111MODULE=on
 all: test build
 
 build:
+	cd ./cmd/terraform-runner/setup-terraform-repo && GOOS=linux GOARCH=amd64 $(GOBUILD) && cd -
+	docker build . -f Dockerfile.terraform-runner -t terraform-runner:latest
+
 	GOOS=linux GOARCH=amd64 $(GOBUILD) ./
-	docker build . -t repo-pull-controller:latest
+	docker build . -f Dockerfile.controller -t repo-pull-controller:latest
 
 test:
 	$(GOTEST) ./
