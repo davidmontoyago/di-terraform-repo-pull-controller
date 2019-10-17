@@ -1,8 +1,0 @@
----
-apiVersion: terraform.gitops.k8s.io/v1alpha1
-kind: Repo
-metadata:
-  name: example-repo
-spec:
-  url: git@github.com:davidmontoyago/di-terraform-repo-pull-example.git
----
