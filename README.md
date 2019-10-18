@@ -20,6 +20,17 @@ kubectl apply -f https://raw.githubusercontent.com/davidmontoyago/di-terraform-r
 kubectl get jobs
 ```
 
+## How It Works
+The controller uses "Informers" to be notified of changes to `Repo` or `Job` resources. When a `Repo` resource is created, a `RepoPoller` goroutine will run to check the source repo for new revisions. When a new revision is found, its "Run" status will be updated to trigger the scheduling of a new Job to apply the changes. The repo "Run" status will be reconciled by `syncHandler`.
+
+All `Repo` resource changes are processed via a work queue. From the original K8s `sample-controller` documentation:
+
+> workqueue is a rate limited work queue. This is used to queue work to be
+	processed instead of performing it as soon as a change happens. This
+	means we can ensure we only process a fixed amount of resources at a
+	time, and makes it easy to ensure we are never processing the same item
+	simultaneously in two different workers.
+
 ## Controller Details
 
 The controller makes use of the generators in [k8s.io/code-generator](https://github.com/kubernetes/code-generator)
