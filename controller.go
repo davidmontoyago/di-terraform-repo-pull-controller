@@ -21,8 +21,8 @@ import (
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog"
 
+	status "github.com/davidmontoyago/di-terraform-repo-pull-controller/pkg/apis/repo/status"
 	repov1alpha1 "github.com/davidmontoyago/di-terraform-repo-pull-controller/pkg/apis/repo/v1alpha1"
-	clientset "github.com/davidmontoyago/di-terraform-repo-pull-controller/pkg/generated/clientset/versioned"
 	samplescheme "github.com/davidmontoyago/di-terraform-repo-pull-controller/pkg/generated/clientset/versioned/scheme"
 	informers "github.com/davidmontoyago/di-terraform-repo-pull-controller/pkg/generated/informers/externalversions/repo/v1alpha1"
 	listers "github.com/davidmontoyago/di-terraform-repo-pull-controller/pkg/generated/listers/repo/v1alpha1"
@@ -50,8 +50,8 @@ const (
 type Controller struct {
 	// kubeclientset is a standard kubernetes clientset
 	batchclientset batchclientset.BatchV1Interface
-	// repoclientset is a clientset for our own API group
-	repoclientset clientset.Interface
+
+	repoStatusManager status.RepoStatusManager
 
 	jobsLister  batchlisters.JobLister
 	jobsSynced  cache.InformerSynced
@@ -75,7 +75,7 @@ type Controller struct {
 func NewController(
 	batchclientset batchclientset.BatchV1Interface,
 	kubeclientset kubernetes.Interface,
-	repoclientset clientset.Interface,
+	repoStatusManager status.RepoStatusManager,
 	jobInformer batchinformers.JobInformer,
 	repoInformer informers.RepoInformer) *Controller {
 
@@ -90,15 +90,15 @@ func NewController(
 	recorder := eventBroadcaster.NewRecorder(scheme.Scheme, corev1.EventSource{Component: controllerAgentName})
 
 	controller := &Controller{
-		batchclientset: batchclientset,
-		repoclientset:  repoclientset,
-		jobsLister:     jobInformer.Lister(),
-		jobsSynced:     jobInformer.Informer().HasSynced,
-		reposLister:    repoInformer.Lister(),
-		reposSynced:    repoInformer.Informer().HasSynced,
-		workqueue:      workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "Repos"),
-		recorder:       recorder,
-		repoPollers:    make(map[string]*poller.RepoPoller),
+		batchclientset:    batchclientset,
+		repoStatusManager: repoStatusManager,
+		jobsLister:        jobInformer.Lister(),
+		jobsSynced:        jobInformer.Informer().HasSynced,
+		reposLister:       repoInformer.Lister(),
+		reposSynced:       repoInformer.Informer().HasSynced,
+		workqueue:         workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "Repos"),
+		recorder:          recorder,
+		repoPollers:       make(map[string]*poller.RepoPoller),
 	}
 
 	klog.Info("Setting up event handlers")
@@ -251,16 +251,13 @@ func (c *Controller) syncHandler(key string) error {
 		return err
 	}
 
-	jobName := repo.Status.RunJobName
-	runStatus := repo.Status.RunStatus
-	if jobName == "" || runStatus != "New" {
-		// Repo has not a Job to run or it has already run. Nothing to do
-		klog.Infof("Repo has no pending Job to run [last known run status: %s].", runStatus)
+	if !c.repoStatusManager.IsNewRepoRun(repo) {
+		klog.Infof("Repo has no Job to run [last known run status: %s].", repo.Status.RunStatus)
 		return nil
 	}
 
-	// Get the job with the last job name specified in Repo.Status
-	job, err := c.jobsLister.Jobs(repo.Namespace).Get(jobName)
+	// Get the job with the given job name
+	job, err := c.jobsLister.Jobs(repo.Namespace).Get(repo.Status.RunJobName)
 	// If the resource doesn't exist, we'll create it
 	if errors.IsNotFound(err) {
 		job, err = c.batchclientset.Jobs(repo.Namespace).Create(newJob(repo))
@@ -281,21 +278,6 @@ func (c *Controller) syncHandler(key string) error {
 		return fmt.Errorf(msg)
 	}
 
-	// If this number of the replicas on the Repo resource is specified, and the
-	// number does not equal the current desired replicas on the Deployment, we
-	// should update the Deployment resource.
-	// if foo.Spec.Replicas != nil && *foo.Spec.Replicas != *deployment.Spec.Replicas {
-	// 	klog.V(4).Infof("Foo %s replicas: %d, deployment replicas: %d", name, *foo.Spec.Replicas, *deployment.Spec.Replicas)
-	// 	deployment, err = c.kubeclientset.AppsV1().Deployments(foo.Namespace).Update(newJob(foo))
-	// }
-
-	// If an error occurs during Update, we'll requeue the item so we can
-	// attempt processing again later. THis could have been caused by a
-	// temporary network failure, or any other transient reason.
-	if err != nil {
-		return err
-	}
-
 	// Finally, we update the status block of the Repo resource to reflect the
 	// current state of the world
 	err = c.updateRepoStatus(repo, job)
@@ -308,38 +290,7 @@ func (c *Controller) syncHandler(key string) error {
 }
 
 func (c *Controller) updateRepoStatus(repo *repov1alpha1.Repo, job *batchv1.Job) error {
-	// NEVER modify objects from the store. It's a read-only, local cache.
-	// You can use DeepCopy() to make a deep copy of original object and modify this copy
-	// Or create a copy manually for better performance
-	repoCopy := repo.DeepCopy()
-
-	// currentTime := time.Now()
-	// TODO set last ran datetime & last run status/run output
-
-	repoCopy.Status.RunStatus = DetermineRunStatus(job)
-
-	// If the CustomResourceSubresources feature gate is not enabled,
-	// we must use Update instead of UpdateStatus to update the Status block of the Repo resource.
-	// UpdateStatus will not allow changes to the Spec of the resource,
-	// which is ideal for ensuring nothing other than resource status has been updated.
-	_, err := c.repoclientset.RepoV1alpha1().Repos(repo.Namespace).Update(repoCopy)
-	return err
-}
-
-func DetermineRunStatus(job *batchv1.Job) string {
-	var runStatus string
-	if job.Status.Active == 0 {
-		if job.Status.Succeeded != 0 {
-			runStatus = "Completed"
-		} else if job.Status.Failed != 0 {
-			runStatus = "Failed"
-		} else {
-			runStatus = "Pending"
-		}
-	} else {
-		runStatus = "Running"
-	}
-	return runStatus
+	return c.repoStatusManager.SetJobRunStatus(repo, job)
 }
 
 // enqueueRepo takes a Repo resource and converts it into a namespace/name
@@ -357,7 +308,7 @@ func (c *Controller) enqueueRepo(obj interface{}) {
 		klog.Infof("Starting repo poller for '%s'...", key)
 		repo := obj.(*repov1alpha1.Repo)
 		var repoCopy repov1alpha1.Repo = *repo.DeepCopy()
-		repoPoller := poller.NewRepoPoller(key, repoCopy, c.repoclientset)
+		repoPoller := poller.NewRepoPoller(key, repoCopy, c.repoStatusManager)
 		repoPoller.Start()
 		c.repoPollers[key] = repoPoller
 	}
@@ -386,6 +337,7 @@ func (c *Controller) handleJob(obj interface{}) {
 		}
 		klog.V(4).Infof("Recovered deleted object '%s' from tombstone", object.GetName())
 	}
+
 	klog.V(4).Infof("Processing object: %s", object.GetName())
 	if ownerRef := metav1.GetControllerOf(object); ownerRef != nil {
 		// If this object is not owned by a Foo, we should not do anything more
@@ -400,9 +352,9 @@ func (c *Controller) handleJob(obj interface{}) {
 			return
 		}
 
+		// update repo status based on Job status
 		job := obj.(*batchv1.Job)
-		// TODO clone repo
-		repo.Status.RunStatus = DetermineRunStatus(job)
+		c.updateRepoStatus(repo, job)
 
 		c.enqueueRepo(repo)
 		return

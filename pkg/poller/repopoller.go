@@ -1,12 +1,11 @@
 package poller
 
 import (
-	"fmt"
 	"log"
 	"time"
 
+	"github.com/davidmontoyago/di-terraform-repo-pull-controller/pkg/apis/repo/status"
 	repo "github.com/davidmontoyago/di-terraform-repo-pull-controller/pkg/apis/repo/v1alpha1"
-	clientset "github.com/davidmontoyago/di-terraform-repo-pull-controller/pkg/generated/clientset/versioned"
 	"gopkg.in/src-d/go-git.v4"
 	"gopkg.in/src-d/go-git.v4/config"
 	"gopkg.in/src-d/go-git.v4/plumbing"
@@ -17,26 +16,26 @@ import (
 const POLLING_FREQUENCY_SECONDS = 30
 
 type RepoPoller struct {
-	RepoKey       string
-	Repo          repo.Repo
-	Ticker        *time.Ticker
-	Done          chan bool
-	repoclientset clientset.Interface
+	RepoKey           string
+	Repo              repo.Repo
+	Ticker            *time.Ticker
+	Done              chan bool
+	repoStatusManager status.RepoStatusManager
 }
 
 func NewRepoPoller(repoKey string,
 	repo repo.Repo,
-	repoclientset clientset.Interface) *RepoPoller {
+	repoStatusManager status.RepoStatusManager) *RepoPoller {
 
 	ticker := time.NewTicker(POLLING_FREQUENCY_SECONDS * time.Second)
 	done := make(chan bool)
 
 	return &RepoPoller{
-		RepoKey:       repoKey,
-		Repo:          repo,
-		Ticker:        ticker,
-		Done:          done,
-		repoclientset: repoclientset,
+		RepoKey:           repoKey,
+		Repo:              repo,
+		Ticker:            ticker,
+		Done:              done,
+		repoStatusManager: repoStatusManager,
 	}
 }
 
@@ -71,22 +70,25 @@ func (poller *RepoPoller) CheckForNewRevisions() {
 		log.Fatal(err)
 	}
 
-	masterRef := FindMasterRef(refs)
-	masterHash := masterRef.Hash().String()
 	lastScheduledRef := poller.Repo.Status.GitSHA
-	if masterHash != lastScheduledRef {
-		klog.Infof("Found new commit reference %s... Previous was %s", masterHash, lastScheduledRef)
-		repo := &poller.Repo
-		repo.Status.RunJobName = fmt.Sprintf("terraform-run-%s", masterHash)
-		repo.Status.GitSHA = masterHash
-		repo.Status.RunStatus = "New"
-		_, err := poller.repoclientset.RepoV1alpha1().Repos(repo.Namespace).Update(repo)
+	if ok, masterHash := HasNewRevision(refs, lastScheduledRef); ok {
+		err := poller.repoStatusManager.SetNewJobRun(&poller.Repo, masterHash)
 		if err != nil {
 			log.Fatal(err)
 		}
 	} else {
 		klog.Infof("No pending commits to run... nothing to do.")
 	}
+}
+
+func HasNewRevision(refs []*plumbing.Reference, previousHash string) (bool, string) {
+	masterRef := FindMasterRef(refs)
+	masterHash := masterRef.Hash().String()
+	if masterHash != previousHash {
+		klog.Infof("Found new commit reference %s... Previous was %s", masterHash, previousHash)
+		return true, masterHash
+	}
+	return false, ""
 }
 
 func FindMasterRef(refs []*plumbing.Reference) plumbing.Reference {

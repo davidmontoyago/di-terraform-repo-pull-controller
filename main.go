@@ -13,6 +13,7 @@ import (
 	// Uncomment the following line to load the gcp plugin (only required to authenticate against GKE clusters).
 	// _ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
 
+	status "github.com/davidmontoyago/di-terraform-repo-pull-controller/pkg/apis/repo/status"
 	clientset "github.com/davidmontoyago/di-terraform-repo-pull-controller/pkg/generated/clientset/versioned"
 	informers "github.com/davidmontoyago/di-terraform-repo-pull-controller/pkg/generated/informers/externalversions"
 	"github.com/davidmontoyago/di-terraform-repo-pull-controller/pkg/signals"
@@ -53,9 +54,12 @@ func main() {
 	kubeInformerFactory := kubeinformers.NewSharedInformerFactory(kubeClient, time.Second*30)
 	repoInformerFactory := informers.NewSharedInformerFactory(repoClient, time.Second*30)
 
+	repoStatusManager := status.NewRepoStatusManager(repoClient)
+
 	controller := NewController(
 		batchClient,
-		kubeClient, repoClient,
+		kubeClient,
+		repoStatusManager,
 		kubeInformerFactory.Batch().V1().Jobs(),
 		repoInformerFactory.Repo().V1alpha1().Repos())
 
