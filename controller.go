@@ -340,7 +340,7 @@ func (c *Controller) handleJob(obj interface{}) {
 
 	klog.V(4).Infof("Processing object: %s", object.GetName())
 	if ownerRef := metav1.GetControllerOf(object); ownerRef != nil {
-		// If this object is not owned by a Foo, we should not do anything more
+		// If this object is not owned by a Repo, we should not do anything more
 		// with it.
 		if ownerRef.Kind != "Repo" {
 			return

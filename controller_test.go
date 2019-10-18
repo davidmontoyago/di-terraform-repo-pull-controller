@@ -1,12 +1,11 @@
 package main
 
 import (
-	"fmt"
 	"reflect"
 	"testing"
 	"time"
 
-	apps "k8s.io/api/apps/v1"
+	batchv1 "k8s.io/api/batch/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -17,7 +16,8 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/record"
 
-	samplecontroller "github.com/davidmontoyago/di-terraform-repo-pull-controller/pkg/apis/repo/v1alpha1"
+	status "github.com/davidmontoyago/di-terraform-repo-pull-controller/pkg/apis/repo/status"
+	repov1alpha1 "github.com/davidmontoyago/di-terraform-repo-pull-controller/pkg/apis/repo/v1alpha1"
 	"github.com/davidmontoyago/di-terraform-repo-pull-controller/pkg/generated/clientset/versioned/fake"
 	informers "github.com/davidmontoyago/di-terraform-repo-pull-controller/pkg/generated/informers/externalversions"
 )
@@ -30,11 +30,12 @@ var (
 type fixture struct {
 	t *testing.T
 
-	client     *fake.Clientset
-	kubeclient *k8sfake.Clientset
+	repoclient  *fake.Clientset
+	batchclient *k8sfake.Clientset
+	kubeclient  *k8sfake.Clientset
 	// Objects to put in the store.
-	fooLister        []*samplecontroller.Foo
-	deploymentLister []*apps.Deployment
+	reposLister []*repov1alpha1.Repo
+	jobsLister  []*batchv1.Job
 	// Actions expected to happen on the client.
 	kubeactions []core.Action
 	actions     []core.Action
@@ -51,70 +52,71 @@ func newFixture(t *testing.T) *fixture {
 	return f
 }
 
-func newFoo(name string, replicas *int32) *samplecontroller.Foo {
-	return &samplecontroller.Foo{
-		TypeMeta: metav1.TypeMeta{APIVersion: samplecontroller.SchemeGroupVersion.String()},
+func newRepo(name string) *repov1alpha1.Repo {
+	return &repov1alpha1.Repo{
+		TypeMeta: metav1.TypeMeta{APIVersion: repov1alpha1.SchemeGroupVersion.String()},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
 			Namespace: metav1.NamespaceDefault,
 		},
-		Spec: samplecontroller.FooSpec{
-			DeploymentName: fmt.Sprintf("%s-deployment", name),
-			Replicas:       replicas,
+		Spec: repov1alpha1.RepoSpec{
+			Url: "https://github.com/davidmontoyago/some-repo.git",
 		},
 	}
 }
 
 func (f *fixture) newController() (*Controller, informers.SharedInformerFactory, kubeinformers.SharedInformerFactory) {
-	f.client = fake.NewSimpleClientset(f.objects...)
+	f.batchclient = k8sfake.NewSimpleClientset(f.kubeobjects...)
 	f.kubeclient = k8sfake.NewSimpleClientset(f.kubeobjects...)
+	f.repoclient = fake.NewSimpleClientset(f.objects...)
+	repoStatusManager := status.NewRepoStatusManager(f.repoclient)
 
-	i := informers.NewSharedInformerFactory(f.client, noResyncPeriodFunc())
-	k8sI := kubeinformers.NewSharedInformerFactory(f.kubeclient, noResyncPeriodFunc())
+	kubeInformerFactory := kubeinformers.NewSharedInformerFactory(f.kubeclient, noResyncPeriodFunc())
+	repoInformerFactory := informers.NewSharedInformerFactory(f.repoclient, noResyncPeriodFunc())
 
-	c := NewController(f.kubeclient, f.client,
-		k8sI.Apps().V1().Deployments(), i.Samplecontroller().V1alpha1().Foos())
+	c := NewController(f.batchclient.BatchV1(), f.kubeclient, repoStatusManager,
+		kubeInformerFactory.Batch().V1().Jobs(), repoInformerFactory.Repo().V1alpha1().Repos())
 
-	c.foosSynced = alwaysReady
-	c.deploymentsSynced = alwaysReady
+	c.reposSynced = alwaysReady
+	c.jobsSynced = alwaysReady
 	c.recorder = &record.FakeRecorder{}
 
-	for _, f := range f.fooLister {
-		i.Samplecontroller().V1alpha1().Foos().Informer().GetIndexer().Add(f)
+	for _, f := range f.reposLister {
+		repoInformerFactory.Repo().V1alpha1().Repos().Informer().GetIndexer().Add(f)
 	}
 
-	for _, d := range f.deploymentLister {
-		k8sI.Apps().V1().Deployments().Informer().GetIndexer().Add(d)
+	for _, d := range f.jobsLister {
+		kubeInformerFactory.Batch().V1().Jobs().Informer().GetIndexer().Add(d)
 	}
 
-	return c, i, k8sI
+	return c, repoInformerFactory, kubeInformerFactory
 }
 
-func (f *fixture) run(fooName string) {
-	f.runController(fooName, true, false)
+func (f *fixture) run(repoName string) {
+	f.runController(repoName, true, false)
 }
 
-func (f *fixture) runExpectError(fooName string) {
-	f.runController(fooName, true, true)
+func (f *fixture) runExpectError(repoName string) {
+	f.runController(repoName, true, true)
 }
 
-func (f *fixture) runController(fooName string, startInformers bool, expectError bool) {
-	c, i, k8sI := f.newController()
+func (f *fixture) runController(repoName string, startInformers bool, expectError bool) {
+	c, i, kubeInformerFactory := f.newController()
 	if startInformers {
 		stopCh := make(chan struct{})
 		defer close(stopCh)
 		i.Start(stopCh)
-		k8sI.Start(stopCh)
+		kubeInformerFactory.Start(stopCh)
 	}
 
-	err := c.syncHandler(fooName)
+	err := c.syncHandler(repoName)
 	if !expectError && err != nil {
-		f.t.Errorf("error syncing foo: %v", err)
+		f.t.Errorf("error syncing repo: %v", err)
 	} else if expectError && err == nil {
-		f.t.Error("expected error syncing foo, got nil")
+		f.t.Error("expected error syncing repo, got nil")
 	}
 
-	actions := filterInformerActions(f.client.Actions())
+	actions := filterInformerActions(f.repoclient.Actions())
 	for i, action := range actions {
 		if len(f.actions) < i+1 {
 			f.t.Errorf("%d unexpected actions: %+v", len(actions)-len(f.actions), actions[i:])
@@ -199,10 +201,10 @@ func filterInformerActions(actions []core.Action) []core.Action {
 	ret := []core.Action{}
 	for _, action := range actions {
 		if len(action.GetNamespace()) == 0 &&
-			(action.Matches("list", "foos") ||
-				action.Matches("watch", "foos") ||
-				action.Matches("list", "deployments") ||
-				action.Matches("watch", "deployments")) {
+			(action.Matches("list", "repos") ||
+				action.Matches("watch", "repos") ||
+				action.Matches("list", "jobs") ||
+				action.Matches("watch", "jobs")) {
 			continue
 		}
 		ret = append(ret, action)
@@ -211,90 +213,71 @@ func filterInformerActions(actions []core.Action) []core.Action {
 	return ret
 }
 
-func (f *fixture) expectCreateDeploymentAction(d *apps.Deployment) {
-	f.kubeactions = append(f.kubeactions, core.NewCreateAction(schema.GroupVersionResource{Resource: "deployments"}, d.Namespace, d))
+func (f *fixture) expectCreateJobAction(d *batchv1.Job) {
+	f.kubeactions = append(f.kubeactions, core.NewCreateAction(schema.GroupVersionResource{Resource: "jobs"}, d.Namespace, d))
 }
 
-func (f *fixture) expectUpdateDeploymentAction(d *apps.Deployment) {
-	f.kubeactions = append(f.kubeactions, core.NewUpdateAction(schema.GroupVersionResource{Resource: "deployments"}, d.Namespace, d))
+func (f *fixture) expectUpdateDeploymentAction(d *batchv1.Job) {
+	f.kubeactions = append(f.kubeactions, core.NewUpdateAction(schema.GroupVersionResource{Resource: "jobs"}, d.Namespace, d))
 }
 
-func (f *fixture) expectUpdateFooStatusAction(foo *samplecontroller.Foo) {
-	action := core.NewUpdateAction(schema.GroupVersionResource{Resource: "foos"}, foo.Namespace, foo)
+func (f *fixture) expectUpdateRepoStatusAction(repo *repov1alpha1.Repo) {
+	action := core.NewUpdateAction(schema.GroupVersionResource{Resource: "repos"}, repo.Namespace, repo)
 	// TODO: Until #38113 is merged, we can't use Subresource
 	//action.Subresource = "status"
 	f.actions = append(f.actions, action)
 }
 
-func getKey(foo *samplecontroller.Foo, t *testing.T) string {
-	key, err := cache.DeletionHandlingMetaNamespaceKeyFunc(foo)
+func getKey(repo *repov1alpha1.Repo, t *testing.T) string {
+	key, err := cache.DeletionHandlingMetaNamespaceKeyFunc(repo)
 	if err != nil {
-		t.Errorf("Unexpected error getting key for foo %v: %v", foo.Name, err)
+		t.Errorf("Unexpected error getting key for repo %v: %v", repo.Name, err)
 		return ""
 	}
 	return key
 }
 
-func TestCreatesDeployment(t *testing.T) {
+func TestCreatesJob(t *testing.T) {
 	f := newFixture(t)
-	foo := newFoo("test", int32Ptr(1))
+	repo := newRepo("test-repo")
 
-	f.fooLister = append(f.fooLister, foo)
-	f.objects = append(f.objects, foo)
+	f.reposLister = append(f.reposLister, repo)
+	f.objects = append(f.objects, repo)
 
-	expDeployment := newDeployment(foo)
-	f.expectCreateDeploymentAction(expDeployment)
-	f.expectUpdateFooStatusAction(foo)
+	expJob := newJob(repo)
+	f.expectCreateJobAction(expJob)
+	f.expectUpdateRepoStatusAction(repo)
 
-	f.run(getKey(foo, t))
+	f.run(getKey(repo, t))
 }
 
-func TestDoNothing(t *testing.T) {
+func TestDoNothingWhenResourceHasNoJobToRun(t *testing.T) {
 	f := newFixture(t)
-	foo := newFoo("test", int32Ptr(1))
-	d := newDeployment(foo)
+	repo := newRepo("test-repo")
+	job := newJob(repo)
 
-	f.fooLister = append(f.fooLister, foo)
-	f.objects = append(f.objects, foo)
-	f.deploymentLister = append(f.deploymentLister, d)
-	f.kubeobjects = append(f.kubeobjects, d)
+	f.reposLister = append(f.reposLister, repo)
+	f.objects = append(f.objects, repo)
+	f.jobsLister = append(f.jobsLister, job)
+	f.kubeobjects = append(f.kubeobjects, job)
 
-	f.expectUpdateFooStatusAction(foo)
-	f.run(getKey(foo, t))
+	f.expectUpdateRepoStatusAction(repo)
+	f.run(getKey(repo, t))
 }
 
-func TestUpdateDeployment(t *testing.T) {
+func TestNotControlledByResource(t *testing.T) {
 	f := newFixture(t)
-	foo := newFoo("test", int32Ptr(1))
-	d := newDeployment(foo)
+	repo := newRepo("test")
+	job := newJob(repo)
 
-	// Update replicas
-	foo.Spec.Replicas = int32Ptr(2)
-	expDeployment := newDeployment(foo)
+	job.ObjectMeta.OwnerReferences = []metav1.OwnerReference{}
 
-	f.fooLister = append(f.fooLister, foo)
-	f.objects = append(f.objects, foo)
-	f.deploymentLister = append(f.deploymentLister, d)
-	f.kubeobjects = append(f.kubeobjects, d)
+	f.reposLister = append(f.reposLister, repo)
+	f.objects = append(f.objects, repo)
+	f.jobsLister = append(f.jobsLister, job)
+	f.kubeobjects = append(f.kubeobjects, job)
 
-	f.expectUpdateFooStatusAction(foo)
-	f.expectUpdateDeploymentAction(expDeployment)
-	f.run(getKey(foo, t))
-}
-
-func TestNotControlledByUs(t *testing.T) {
-	f := newFixture(t)
-	foo := newFoo("test", int32Ptr(1))
-	d := newDeployment(foo)
-
-	d.ObjectMeta.OwnerReferences = []metav1.OwnerReference{}
-
-	f.fooLister = append(f.fooLister, foo)
-	f.objects = append(f.objects, foo)
-	f.deploymentLister = append(f.deploymentLister, d)
-	f.kubeobjects = append(f.kubeobjects, d)
-
-	f.runExpectError(getKey(foo, t))
+	f.runExpectError(getKey(repo, t))
 }
 
 func int32Ptr(i int32) *int32 { return &i }
