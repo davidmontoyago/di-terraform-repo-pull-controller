@@ -109,6 +109,7 @@ func NewController(
 		UpdateFunc: func(old, new interface{}) {
 			controller.enqueueRepo(new)
 		},
+		DeleteFunc: controller.descheduleRepoPoller,
 	})
 	// Set up an event handler for when Job resources change. This
 	// handler will lookup the owner of the given Job, and if it is
@@ -314,6 +315,20 @@ func (c *Controller) enqueueRepo(obj interface{}) {
 	}
 
 	c.workqueue.Add(key)
+}
+
+func (c *Controller) descheduleRepoPoller(obj interface{}) {
+	var key string
+	var err error
+	if key, err = cache.MetaNamespaceKeyFunc(obj); err != nil {
+		utilruntime.HandleError(err)
+		return
+	}
+	if poller, found := c.repoPollers[key]; found {
+		klog.Infof("Descheduling repo poller for '%s'...", key)
+		poller.Stop()
+		delete(c.repoPollers, key)
+	}
 }
 
 // handleJob will take any resource implementing metav1.Object and attempt
