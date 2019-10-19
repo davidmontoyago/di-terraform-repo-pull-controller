@@ -10,6 +10,9 @@ This repository implements a K8s controller that manages `Repo` resources and wa
 # build controller
 make build
 
+# run units
+make test
+
 # deploy controller & CRD
 make deploy
 
