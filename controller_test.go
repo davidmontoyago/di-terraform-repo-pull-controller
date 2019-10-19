@@ -257,22 +257,20 @@ func TestCreatesJob(t *testing.T) {
 func TestDoNothingWhenResourceHasNoJobToRun(t *testing.T) {
 	f := newFixture(t)
 	repo := newRepo("test-repo")
-	job := newJob(repo)
+	// If empty RunStatus, no new commits have been pulled
+	repo.Status.RunStatus = ""
 
 	f.reposLister = append(f.reposLister, repo)
 	f.objects = append(f.objects, repo)
-	f.jobsLister = append(f.jobsLister, job)
-	f.kubeobjects = append(f.kubeobjects, job)
 
-	f.expectUpdateRepoStatusAction(repo)
 	f.run(getKey(repo, t))
 }
 
 func TestNotControlledByResource(t *testing.T) {
 	f := newFixture(t)
-	repo := newRepo("test")
+	repo := newRepo("test-repo")
+	repo.Status.RunStatus = "New"
 	job := newJob(repo)
-
 	job.ObjectMeta.OwnerReferences = []metav1.OwnerReference{}
 
 	f.reposLister = append(f.reposLister, repo)
