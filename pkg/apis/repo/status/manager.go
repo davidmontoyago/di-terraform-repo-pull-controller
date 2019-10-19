@@ -3,7 +3,9 @@ package status
 import (
 	"fmt"
 
+	"github.com/pkg/errors"
 	batchv1 "k8s.io/api/batch/v1"
+	kubeerrors "k8s.io/apimachinery/pkg/api/errors"
 
 	repo "github.com/davidmontoyago/di-terraform-repo-pull-controller/pkg/apis/repo/v1alpha1"
 	clientset "github.com/davidmontoyago/di-terraform-repo-pull-controller/pkg/generated/clientset/versioned"
@@ -28,6 +30,19 @@ func (statusManager RepoStatusManager) update(repo *repo.Repo) error {
 	// UpdateStatus will not allow changes to the Spec of the resource,
 	// which is ideal for ensuring nothing other than resource status has been updated.
 	_, err := statusManager.repoclientset.RepoV1alpha1().Repos(repo.Namespace).Update(repo)
+	if err != nil {
+		if !kubeerrors.IsNotFound(err) {
+			return errors.Wrapf(err, "updating object %v/%v failed", repo.Namespace, repo.Name)
+		}
+
+		// Upsert can be handled by the API server depending on cluster configuration.
+		// This is to compensate for those cases and for the lack of it in the client-go testing lib
+		// See https://github.com/kubernetes/client-go/issues/479
+		_, err = statusManager.repoclientset.RepoV1alpha1().Repos(repo.Namespace).Create(repo)
+		if err != nil {
+			return errors.Wrapf(err, "creating object %v/%v failed", repo.Namespace, repo.Name)
+		}
+	}
 	return err
 }
 
@@ -48,7 +63,7 @@ func (statusManager RepoStatusManager) SetJobRunStatus(repo *repo.Repo, job *bat
 }
 
 func (statusManager RepoStatusManager) IsNewRepoRun(repo *repo.Repo) bool {
-	return repo.Status.RunJobName == "" || repo.Status.RunStatus != "New"
+	return repo.Status.RunStatus == "New"
 }
 
 func determineRunStatus(job *batchv1.Job) string {

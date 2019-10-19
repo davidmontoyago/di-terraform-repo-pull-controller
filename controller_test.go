@@ -70,7 +70,6 @@ func (f *fixture) newController() (*Controller, informers.SharedInformerFactory,
 	f.kubeclient = k8sfake.NewSimpleClientset(f.kubeobjects...)
 	f.repoclient = fake.NewSimpleClientset(f.objects...)
 	repoStatusManager := status.NewRepoStatusManager(f.repoclient)
-
 	kubeInformerFactory := kubeinformers.NewSharedInformerFactory(f.kubeclient, noResyncPeriodFunc())
 	repoInformerFactory := informers.NewSharedInformerFactory(f.repoclient, noResyncPeriodFunc())
 
@@ -101,11 +100,11 @@ func (f *fixture) runExpectError(repoName string) {
 }
 
 func (f *fixture) runController(repoName string, startInformers bool, expectError bool) {
-	c, i, kubeInformerFactory := f.newController()
+	c, repoInformerFactory, kubeInformerFactory := f.newController()
 	if startInformers {
 		stopCh := make(chan struct{})
 		defer close(stopCh)
-		i.Start(stopCh)
+		repoInformerFactory.Start(stopCh)
 		kubeInformerFactory.Start(stopCh)
 	}
 
@@ -131,7 +130,7 @@ func (f *fixture) runController(repoName string, startInformers bool, expectErro
 		f.t.Errorf("%d additional expected actions:%+v", len(f.actions)-len(actions), f.actions[len(actions):])
 	}
 
-	k8sActions := filterInformerActions(f.kubeclient.Actions())
+	k8sActions := filterInformerActions(f.batchclient.Actions())
 	for i, action := range k8sActions {
 		if len(f.kubeactions) < i+1 {
 			f.t.Errorf("%d unexpected actions: %+v", len(k8sActions)-len(f.kubeactions), k8sActions[i:])
@@ -222,10 +221,13 @@ func (f *fixture) expectUpdateDeploymentAction(d *batchv1.Job) {
 }
 
 func (f *fixture) expectUpdateRepoStatusAction(repo *repov1alpha1.Repo) {
-	action := core.NewUpdateAction(schema.GroupVersionResource{Resource: "repos"}, repo.Namespace, repo)
+	updateAction := core.NewUpdateAction(schema.GroupVersionResource{Resource: "repos"}, repo.Namespace, repo)
 	// TODO: Until #38113 is merged, we can't use Subresource
 	//action.Subresource = "status"
-	f.actions = append(f.actions, action)
+	f.actions = append(f.actions, updateAction)
+
+	createAction := core.NewCreateAction(schema.GroupVersionResource{Resource: "repos", Version: "v1alpha", Group: "repo.terraform.gitops.k8s.io"}, repo.Namespace, repo)
+	f.actions = append(f.actions, createAction)
 }
 
 func getKey(repo *repov1alpha1.Repo, t *testing.T) string {
@@ -240,6 +242,7 @@ func getKey(repo *repov1alpha1.Repo, t *testing.T) string {
 func TestCreatesJob(t *testing.T) {
 	f := newFixture(t)
 	repo := newRepo("test-repo")
+	repo.Status.RunStatus = "New"
 
 	f.reposLister = append(f.reposLister, repo)
 	f.objects = append(f.objects, repo)
