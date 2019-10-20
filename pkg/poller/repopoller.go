@@ -17,15 +17,17 @@ const POLLING_FREQUENCY_SECONDS = 30
 
 type RepoPoller struct {
 	RepoKey           string
-	Repo              repo.Repo
+	Repo              *repo.Repo
 	Ticker            *time.Ticker
 	Done              chan bool
 	repoStatusManager status.RepoStatusManager
+	gitRemote         GitRemote
 }
 
 func NewRepoPoller(repoKey string,
-	repo repo.Repo,
-	repoStatusManager status.RepoStatusManager) *RepoPoller {
+	repo *repo.Repo,
+	repoStatusManager status.RepoStatusManager,
+	gitRemote GitRemote) *RepoPoller {
 
 	ticker := time.NewTicker(POLLING_FREQUENCY_SECONDS * time.Second)
 	done := make(chan bool)
@@ -36,6 +38,7 @@ func NewRepoPoller(repoKey string,
 		Ticker:            ticker,
 		Done:              done,
 		repoStatusManager: repoStatusManager,
+		gitRemote:         gitRemote,
 	}
 }
 
@@ -59,20 +62,19 @@ func (poller *RepoPoller) Stop() {
 }
 
 func (poller *RepoPoller) CheckForNewRevisions() {
-	rem := git.NewRemote(memory.NewStorage(), &config.RemoteConfig{
+	klog.Infof("Checking for new revisions at %s...", poller.Repo.Spec.Url)
+	remoteConfig := &config.RemoteConfig{
 		Name: "origin",
 		URLs: []string{poller.Repo.Spec.Url},
-	})
-
-	klog.Infof("Checking for new revisions at %s...", poller.Repo.Spec.Url)
-	refs, err := rem.List(&git.ListOptions{})
+	}
+	refs, err := poller.gitRemote.ListReferences(memory.NewStorage(), remoteConfig, &git.ListOptions{})
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	lastScheduledRef := poller.Repo.Status.GitSHA
 	if ok, masterHash := HasNewRevision(refs, lastScheduledRef); ok {
-		err := poller.repoStatusManager.SetNewJobRun(&poller.Repo, masterHash)
+		err := poller.repoStatusManager.SetNewJobRun(poller.Repo, masterHash)
 		if err != nil {
 			log.Fatal(err)
 		}

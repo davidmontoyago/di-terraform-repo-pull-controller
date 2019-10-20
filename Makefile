@@ -14,6 +14,7 @@ build:
 
 test:
 	$(GOTEST) ./
+	$(GOTEST) ./pkg/poller
 
 clean:
 	$(GOCLEAN)

@@ -48,17 +48,15 @@ func (statusManager RepoStatusManager) update(repo *repo.Repo) error {
 
 // Set desired state as new job run
 func (statusManager RepoStatusManager) SetNewJobRun(repo *repo.Repo, newGitSha string) error {
-	repoCopy := repo.DeepCopy()
-	repoCopy.Status.RunJobName = fmt.Sprintf("terraform-run-%s", newGitSha)
-	repoCopy.Status.GitSHA = newGitSha
-	repoCopy.Status.RunStatus = "New"
-	return statusManager.update(repoCopy)
+	repo.Status.RunJobName = fmt.Sprintf("terraform-run-%s", newGitSha)
+	repo.Status.GitSHA = newGitSha
+	repo.Status.RunStatus = "New"
+	return statusManager.update(repo)
 }
 
 func (statusManager RepoStatusManager) SetJobRunStatus(repo *repo.Repo, job *batchv1.Job) error {
 	// TODO set last ran datetime & last run status/run output
-	repoCopy := repo.DeepCopy()
-	repoCopy.Status.RunStatus = determineRunStatus(job)
+	repo.Status.RunStatus = determineRunStatus(job)
 	return statusManager.update(repo)
 }
 
