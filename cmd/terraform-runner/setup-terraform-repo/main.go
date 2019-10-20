@@ -2,7 +2,6 @@ package main
 
 import (
 	"bytes"
-	"log"
 	"os"
 	"os/exec"
 
@@ -25,7 +24,15 @@ func main() {
 	klog.Infof("GIT_SHA=%s", gitSHA)
 
 	GitCheckout(repoUrl, gitSHA)
-	ListRepoContents()
+
+	klog.Infof("Listing repo contents...")
+	RunCommand("ls", "-al", "/workspace")
+
+	klog.Infof("Initializing Terraform...")
+	RunCommand("terraform", "init")
+
+	klog.Infof("Applying changes...")
+	RunCommand("terraform", "apply", "-auto-approve")
 }
 
 func GitCheckout(repoUrl string, gitSHA string) {
@@ -45,15 +52,13 @@ func GitCheckout(repoUrl string, gitSHA string) {
 	klog.Infof("Completed repo checkout to %s.", gitSHA)
 }
 
-func ListRepoContents() {
-	cmd := exec.Command("ls", "-al", "/workspace")
+func RunCommand(command string, args ...string) {
+	cmd := exec.Command(command, args...)
 	var out bytes.Buffer
 	cmd.Stdout = &out
 	err := cmd.Run()
-	if err != nil {
-		log.Fatal(err)
-	}
-	klog.Infof("Listing repo contents... \n%s", out.String())
+	TerminateIfError(err, "Failed to run command: %v")
+	klog.Infof("\n%s", out.String())
 }
 
 func TerminateIfError(err error, format string) {
