@@ -1,13 +1,7 @@
 # Aspirational Features
 
-- Seed a repo
-- Scan repo
-	- Schedule job run and plan changes
-	- Keep a tfplan log
-	- Fetch a tfplan and apply
-	- Report current state/last applied
-	- Set TF_IN_AUTOMATION
-	- Allow branch, tag and PR workflows
+- Keep a tfplan log & make tf plans available for review
+- Allow branch, tag and PR workflows
 - Manage terraform state
 	- Save working directory (.terraform + state)
 	- Allow state locking for racing conditions
