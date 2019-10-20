@@ -417,6 +417,10 @@ func newJob(repo *repov1alpha1.Repo) *batchv1.Job {
 									Name:  "GIT_SHA",
 									Value: repo.Status.GitSHA,
 								},
+								corev1.EnvVar{
+									Name:  "TF_IN_AUTOMATION",
+									Value: "true",
+								},
 							},
 						},
 					},
