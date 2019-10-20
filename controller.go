@@ -404,6 +404,20 @@ func newJob(repo *repov1alpha1.Repo) *batchv1.Job {
 							Name:            "terraform-run",
 							Image:           "terraform-runner:latest",
 							ImagePullPolicy: corev1.PullNever,
+							Env: []corev1.EnvVar{
+								corev1.EnvVar{
+									Name:  "REPO_NAME",
+									Value: repo.Name,
+								},
+								corev1.EnvVar{
+									Name:  "REPO_URL",
+									Value: repo.Spec.Url,
+								},
+								corev1.EnvVar{
+									Name:  "GIT_SHA",
+									Value: repo.Status.GitSHA,
+								},
+							},
 						},
 					},
 					RestartPolicy: corev1.RestartPolicyNever,
