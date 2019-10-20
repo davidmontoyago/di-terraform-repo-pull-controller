@@ -18,6 +18,7 @@ test:
 
 clean:
 	$(GOCLEAN)
+	$(GOCLEAN) ./cmd/...
 	make delete
 
 fmt:
